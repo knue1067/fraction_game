@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>기약분수 카드 맞추기 게임</title>
+  <style>
+    body {
+      font-family: "Arial", sans-serif;
+      text-align: center;
+      background-color: #f0f8ff;
+    }
+    h1 { margin-top: 20px; }
+    #info {
+      font-size: 18px;
+      margin-top: 10px;
+    }
+    #game-board {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 15px;
+      margin-top: 30px;
+    }
+    .card {
+      background-color: #ffffff;
+      border: 2px solid #008cba;
+      border-radius: 10px;
+      padding: 20px;
+      width: 100px;
+      height: 100px;
+      cursor: pointer;
+      transition: transform 0.2s;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    .card:hover { transform: scale(1.1); }
+    .fraction {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .numerator, .denominator {
+      font-size: 20px;
+      line-height: 1;
+    }
+    .fraction-bar {
+      width: 30px;
+      height: 1px;
+      background-color: black;
+      margin: 2px 0;
+    }
+    #message {
+      margin-top: 20px;
+      font-size: 20px;
+      font-weight: bold;
+    }
+    #timer {
+      font-size: 18px;
+      margin-top: 10px;
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <h1>기약분수 카드 맞추기 게임</h1>
+  <div id="info">
+    스테이지: <span id="stage-num">1</span> |
+    점수: <span id="score">0</span> |
+    <span id="timer">05:00</span>
+  </div>
+  <div id="game-board"></div>
+  <div id="message"></div>
+  <div id="final-screen" style="display:none; margin-top:20px;">
+    <p id="final-score" style="font-size:20px; font-weight:bold;"></p>
+    <button onclick="restartGame()" style="font-size:16px; padding:10px 20px; margin-top:10px; cursor:pointer;">🔄 다시하기</button>
+  </div>
+
+  <script>
+    let stage = 0;
+    let score = 0;
+    let selected = [];
+    let matchedPairs = 0;
+    let currentPairs = [];
+    let timerInterval;
+    let timeRemaining = 300;
+    let stageLocked = false;
+
+    function gcd(a, b) {
+      return b === 0 ? a : gcd(b, a % b);
+    }
+
+    function simplify(n, d) {
+      let g = gcd(n, d);
+      return [n / g, d / g];
+    }
+
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    function isReduced(n, d) {
+      return gcd(n, d) === 1;
+    }
+
+    function generateReducedPairs(limitSum = false, maxSum = 12) {
+      let baseNumer, baseDenom, unreducedNumer, unreducedDenom;
+      let valid = false;
+
+      while (!valid) {
+        baseNumer = Math.floor(Math.random() * 6) + 1;
+        baseDenom = Math.floor(Math.random() * 6) + 2;
+
+        if (baseNumer >= baseDenom) continue;
+        if (!isReduced(baseNumer, baseDenom)) continue;
+
+        const factor = Math.floor(Math.random() * 4) + 2;
+        unreducedNumer = baseNumer * factor;
+        unreducedDenom = baseDenom * factor;
+
+        if (!isReduced(unreducedNumer, unreducedDenom)) {
+          if (!limitSum || (baseNumer + baseDenom <= maxSum && unreducedNumer + unreducedDenom <= maxSum)) {
+            valid = true;
+          }
+        }
+      }
+
+      return [
+        [String(unreducedNumer), String(unreducedDenom)],
+        [String(baseNumer), String(baseDenom)]
+      ];
+    }
+
+    function generateStages(count) {
+      const stages = [];
+
+      for (let i = 0; i < count; i++) {
+        let pairCount;
+        if (i <= 5) pairCount = 2;
+        else if (i <= 11) pairCount = 3;
+        else if (i <= 16) pairCount = 4;
+        else pairCount = 5;
+        const stagePairs = [];
+        const usedThisStage = new Set();
+        let attempts = 0;
+
+        while (stagePairs.length < pairCount && attempts < 1000) {
+          const limit = i === 0;
+          const maxSum = i === 0 ? 20 : 99;
+          const pair = generateReducedPairs(limit, maxSum);
+
+          const frac1Key = pair[0][0] + '/' + pair[0][1];
+          const frac2Key = pair[1][0] + '/' + pair[1][1];
+
+          if (!usedThisStage.has(frac1Key) && !usedThisStage.has(frac2Key) && frac1Key !== frac2Key) {
+            stagePairs.push(pair);
+            usedThisStage.add(frac1Key);
+            usedThisStage.add(frac2Key);
+          }
+
+          attempts++;
+        }
+
+        stages.push(stagePairs);
+      }
+
+      return stages;
+    }
+
+    const allStages = generateStages(20);
+
+    function updateInfo() {
+      document.getElementById("stage-num").textContent = stage + 1;
+      document.getElementById("score").textContent = score;
+    }
+
+    function updateTimerDisplay() {
+      const min = String(Math.floor(timeRemaining / 60)).padStart(2, '0');
+      const sec = String(timeRemaining % 60).padStart(2, '0');
+      document.getElementById("timer").textContent = `${min}:${sec}`;
+    }
+
+    function startTimer() {
+      updateTimerDisplay();
+      timerInterval = setInterval(() => {
+        timeRemaining--;
+        updateTimerDisplay();
+        if (timeRemaining <= 0) {
+          clearInterval(timerInterval);
+          document.getElementById("game-board").innerHTML = "";
+          document.getElementById("info").style.display = "none";
+          document.getElementById("final-score").textContent = `⏰ 시간 종료! 당신의 점수는 ${score}점입니다.`;
+          document.getElementById("final-screen").style.display = "block";
+        }
+      }, 1000);
+    }
+
+    function setupStage() {
+      const board = document.getElementById("game-board");
+      const message = document.getElementById("message");
+      board.innerHTML = "";
+      message.textContent = "";
+      selected = [];
+      matchedPairs = 0;
+      stageLocked = false;
+
+      if (stage === 0) startTimer();
+      if (stage >= allStages.length) {
+        clearInterval(timerInterval);
+        document.getElementById("info").style.display = "none";
+        document.getElementById("game-board").innerHTML = "";
+        document.getElementById("final-score").textContent = `🎉 모든 스테이지 완료! 당신의 점수는 ${score}점입니다.`;
+        document.getElementById("final-screen").style.display = "block";
+        return;
+      }
+
+      currentPairs = allStages[stage];
+      let cards = [];
+
+      currentPairs.forEach(pair => {
+        pair.forEach(frac => {
+          cards.push({
+            numerator: parseInt(frac[0]),
+            denominator: parseInt(frac[1])
+          });
+        });
+      });
+
+      shuffle(cards);
+
+      cards.forEach(frac => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.dataset.numerator = frac.numerator;
+        card.dataset.denominator = frac.denominator;
+
+        const fracDisplay = document.createElement("div");
+        fracDisplay.className = "fraction";
+        fracDisplay.innerHTML = `
+          <div class="numerator">${frac.numerator}</div>
+          <div class="fraction-bar"></div>
+          <div class="denominator">${frac.denominator}</div>
+        `;
+
+        card.appendChild(fracDisplay);
+        card.addEventListener("click", () => selectCard(card));
+        board.appendChild(card);
+      });
+
+      updateInfo();
+    }
+
+    function selectCard(card) {
+      if (stageLocked || selected.includes(card) || card.classList.contains("matched") || selected.length >= 2) return;
+
+      card.style.backgroundColor = "#cceeff";
+      selected.push(card);
+
+      if (selected.length === 2) {
+        const [a, b] = selected;
+        const aSim = simplify(+a.dataset.numerator, +a.dataset.denominator);
+        const bSim = simplify(+b.dataset.numerator, +b.dataset.denominator);
+
+        if (aSim[0] === bSim[0] && aSim[1] === bSim[1]) {
+          document.getElementById("message").textContent = "🎯 정답!";
+          a.classList.add("matched");
+          b.classList.add("matched");
+          score += 10;
+          matchedPairs++;
+
+          setTimeout(() => {
+            a.remove();
+            b.remove();
+
+            if (matchedPairs === currentPairs.length) {
+              document.getElementById("message").textContent = "다음 스테이지로 이동 중...";
+              stageLocked = true;
+              setTimeout(() => {
+                stage++;
+                setupStage();
+              }, 1500);
+            }
+          }, 500);
+        } else {
+          document.getElementById("message").textContent = "❌ 다시 시도해요!";
+          setTimeout(() => {
+            a.style.backgroundColor = "#ffffff";
+            b.style.backgroundColor = "#ffffff";
+          }, 800);
+          timeRemaining = Math.max(0, timeRemaining - 10);
+          updateTimerDisplay();
+        }
+
+        selected = [];
+        updateInfo();
+      }
+    }
+
+    setupStage();
+  function restartGame() {
+  stage = 0;
+  score = 0;
+  timeRemaining = 300;
+  document.getElementById("info").style.display = "block";
+  document.getElementById("final-screen").style.display = "none";
+  setupStage();
+  startTimer();
+}
+</script>
+</body>
+</html>
