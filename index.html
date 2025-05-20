@@ -185,12 +185,14 @@
     }
 
     function startTimer() {
-      updateTimerDisplay();
-      timerInterval = setInterval(() => {
+  if (timerInterval) return;
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
         timeRemaining--;
         updateTimerDisplay();
         if (timeRemaining <= 0) {
-          clearInterval(timerInterval);
+        clearInterval(timerInterval);
+        timerInterval = null;
           document.getElementById("game-board").innerHTML = "";
           document.getElementById("info").style.display = "none";
           document.getElementById("final-score").textContent = `⏰ 시간 종료! 당신의 점수는 ${score}점입니다.`;
@@ -200,6 +202,8 @@
     }
 
     function setupStage() {
+      if (!timerInterval) startTimer();
+      if (timeRemaining <= 0) return;
       const board = document.getElementById("game-board");
       const message = document.getElementById("message");
       board.innerHTML = "";
@@ -208,8 +212,7 @@
       matchedPairs = 0;
       stageLocked = false;
 
-      if (stage === 0) startTimer();
-      if (stage >= allStages.length) {
+            if (stage >= allStages.length) {
         clearInterval(timerInterval);
         document.getElementById("info").style.display = "none";
         document.getElementById("game-board").innerHTML = "";
@@ -303,6 +306,7 @@
     setupStage();
   function restartGame() {
   clearInterval(timerInterval);
+  timerInterval = null;
   stage = 0;
   score = 0;
   timeRemaining = 300;
