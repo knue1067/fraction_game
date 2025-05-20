@@ -302,6 +302,7 @@
 
     setupStage();
   function restartGame() {
+  clearInterval(timerInterval);
   stage = 0;
   score = 0;
   timeRemaining = 300;
